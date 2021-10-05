@@ -1,0 +1,29 @@
+{
+  "manifest_version": 2,
+  "name": "Historian",
+  "description": "Auto-archive history to remote database",
+  "version": "0.0.1",
+  "icons": {
+    "64": "icons/icon.png"
+  },
+  "background": {
+    "scripts": [
+      "background_script.js"
+    ]
+  },
+  "permissions": [
+      "history",
+      "unlimitedStorage",
+      "storage",
+      "alarms",
+      "<all_urls>"
+  ],
+  "options_ui": {
+    "page": "options/index.html"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "historian@nd.ax"
+    }
+  }
+}
