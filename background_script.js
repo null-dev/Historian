@@ -139,23 +139,26 @@ async function flushVisits() {
         let rows = [];
         let toRemove = [];
         let toUpdate = {};
+        let lookup = {};
         for(const [key, value] of entries) {
             let skipped = [];
             for(let i = 0; i < value.visits.length; i++) {
                 const visit = value.visits[i];
                 // Only flush entries older than 30mins
                 if(visit.time < Date.now() - 30 * 60 * 1000) {
+                    const browser_id = key.substring(STORAGE_HIST_ID_PREFIX.length);
                     const obj = {
                         host_id: machineId,
                         profile_id: profileId,
-                        visit_time: visit.time * 1000,
-                        browser_id: key.substring(STORAGE_HIST_ID_PREFIX.length),
+                        visit_time: Math.round(visit.time * 1000),
+                        browser_id,
                         title: value.title,
                         url: value.url,
                         browser_typed_count: visit.typedCount,
                         browser_visited_count: visit.visitCount
                     };
                     rows.push(obj);
+                    lookup[browser_id] = obj;
                 } else {
                     skipped.push(visit);
                     skippedCnt++;
@@ -180,12 +183,22 @@ async function flushVisits() {
             return;
         }
 
-        const csv = toCSV(rows);
-        const csvBlob = new Blob([csv], {type:"text/csv"});
-        const form = new FormData();
-        form.append("data", csvBlob, "data.csv");
+        // Reconcile titles
+        const curHist = await browser.history.search({text:"", maxResults:999999});
+        for(const entry of curHist) {
+            let obj = lookup[entry.id];
+            if(obj != null && obj.title === '') {
+                obj.title = entry.title;
+            }
+        }
+
 
         try {
+            const csv = toCSV(rows);
+            const csvBlob = new Blob([csv], {type:"text/csv"});
+            const form = new FormData();
+            form.append("data", csvBlob, "data.csv");
+
             const resp = await fetch(dbHost + '?atomicity=0&durable=false&fmt=json&forceHeader=true&name=historian&overwrite=false&skipLev=true', {
                 method: 'POST',
                 body: form
@@ -208,7 +221,9 @@ async function flushVisits() {
 }
 
 browser.history.onVisited.addListener(onVisited);
-browser.history.onTitleChanged.addListener(onTitleChanged);
+const browserOnTitleChanged = browser.history.onTitleChanged;
+if(browserOnTitleChanged != null)
+    browserOnTitleChanged.addListener(onTitleChanged);
 browser.alarms.onAlarm.addListener(handleAlarm);
 
 // Flush every 30 mins
